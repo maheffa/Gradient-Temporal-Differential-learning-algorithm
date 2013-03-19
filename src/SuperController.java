@@ -291,12 +291,8 @@ public class SuperController extends Supervisor {
     
     public static void main(String[] args) {
         SuperController controller = new SuperController();
-        try {
-            System.out.println("Launching supercontroller");
+       System.out.println("Launching supercontroller");
             controller.run();
-        } catch (IOException ex) {
-            System.err.println("Error while launching supercontroller");
-            ex.printStackTrace();
-        }
+        
     }
 }
