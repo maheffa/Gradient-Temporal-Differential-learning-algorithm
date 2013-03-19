@@ -100,58 +100,63 @@ public class SuperController extends Supervisor {
         RLAlgorithm.start();
     }
     
-    public void run() throws IOException {
+    public void run(){
         
         // Backup startup configuration
         createBackup();
         
         do {
-            // Restore startup configuration for new test
-            restoreFromBackup();
-            
-            /*
-             * Work with GA to get the chromosome information
-             */
-            // Wait and accept connection from RL algorithm
-            System.out.println("WAINTING FOR RL");
-            Socket RLSocket = waitForRL();
-            // Read chromosome from RL algorithm through RLSocket
-            System.out.println("READING FROM RL");
-            readRL(RLSocket);
-            // Close the socket, we don't use it anymore
-            System.out.println("CLOSING RL");
-            RLSocket.close();
-            // After reading instrution from RL algorithm, prepare it to send to Controller
-            prepareToServeController();
-            
-            /*
-             * Work with Controller to execute info in the chromosome
-             */
-            // Wait and accept connection from RL algorithm
-            System.out.println("WAINTING FOR CTRL");
-            Socket ControllerSocket = waitForController();
-            // Read chromosome from RL algorithm through RLSocket
-            System.out.println("SENDING TO CTRL");
-            sendController(ControllerSocket);
-            // Close the socket, we don't use it anymore
-            System.out.println("CLOSING CTRL");
-            ControllerSocket.close();
-            // After the controller finish working, prepare to send result to GA
-            prepareToServeRL();
-            
-            /*
-             * Work with GA and send them the result
-             */
-            // Wait and accept connection from RL algorithm
-            System.out.println("WAITING FOR RSLT");
-            Socket ResultSocket = waitForResult();
-            // Read chromosome from RL algorithm through RLSocket
-            System.out.println("SENDING TO RSLT");
-            sendResult(ResultSocket);
-            // Close the socket, we don't use it anymore
-            System.out.println("CLOSING RSLT");
-            ResultSocket.close();
-            // After reading instrution from RL algorithm, prepare it to send to Controller
+            try {
+                // Restore startup configuration for new test
+                restoreFromBackup();
+                
+                /*
+                 * Work with GA to get the chromosome information
+                 */
+                // Wait and accept connection from RL algorithm
+                System.out.println("WAINTING FOR RL");
+                Socket RLSocket = waitForRL();
+                // Read chromosome from RL algorithm through RLSocket
+                System.out.println("READING FROM RL");
+                readRL(RLSocket);
+                // Close the socket, we don't use it anymore
+                System.out.println("CLOSING RL");
+                RLSocket.close();
+                // After reading instrution from RL algorithm, prepare it to send to Controller
+                prepareToServeController();
+                
+                /*
+                 * Work with Controller to execute info in the chromosome
+                 */
+                // Wait and accept connection from RL algorithm
+                step(Util.TIME_STEP);
+                System.out.println("WAINTING FOR CTRL");
+                Socket ControllerSocket = waitForController();
+                // Read chromosome from RL algorithm through RLSocket
+                System.out.println("SENDING TO CTRL");
+                sendController(ControllerSocket);
+                // Close the socket, we don't use it anymore
+                System.out.println("CLOSING CTRL");
+                ControllerSocket.close();
+                // After the controller finish working, prepare to send result to GA
+                prepareToServeRL();
+                
+                /*
+                 * Work with GA and send them the result
+                 */
+                // Wait and accept connection from RL algorithm
+                System.out.println("WAITING FOR RSLT");
+                Socket ResultSocket = waitForResult();
+                // Read chromosome from RL algorithm through RLSocket
+                System.out.println("SENDING TO RSLT");
+                sendResult(ResultSocket);
+                // Close the socket, we don't use it anymore
+                System.out.println("CLOSING RSLT");
+                ResultSocket.close();
+                // After reading instrution from RL algorithm, prepare it to send to Controller
+            } catch (IOException ex) {
+                Logger.getLogger(SuperController.class.getName()).log(Level.SEVERE, null, ex);
+            }
             
             
         } while (step(Util.TIME_STEP) != -1);
