@@ -44,7 +44,7 @@ public class InstructionFitnessFunction extends FitnessFunction {
         
         // Connect to supercontroller server and send instruction from chromosome
         System.out.println("[GA] Creating socket");
-        Socket socket = new Socket(InetAddress.getLocalHost(), Util.SUPERCONTROLLER_PORT);
+        Socket socket = new Socket(InetAddress.getLocalHost(), Util.RL_PORT);
         PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         
@@ -68,7 +68,7 @@ public class InstructionFitnessFunction extends FitnessFunction {
         
         // Connect to supercontroller server and send instruction from chromosome
         System.out.println("[GA] Creating socket");
-        Socket socket = new Socket(InetAddress.getLocalHost(), Util.RLANSWER_PORT);
+        Socket socket = new Socket(InetAddress.getLocalHost(), Util.RESULT_PORT);
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         
         // Read the result from supercontroller

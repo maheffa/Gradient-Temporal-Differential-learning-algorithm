@@ -57,10 +57,7 @@ public class SuperController extends Supervisor {
     
     private Map<String, Status> backup = null;
     private String[] devicesDEF = null;
-    private ServerSocket superControllerServerSocket = null, resultServerSocket = null;
-    private Socket RLClientSocket = null, controllerClientSocket = null;
-    private PrintWriter outRL = null, outController = null;
-    private BufferedReader inRL = null, inController = null;
+    private ServerSocket srvRL = null, srvController = null, srvResult = null;
     private ArrayList<String> instructionsFromRL = null;
     private ArrayList<String> instructionsToController = null;
     private ArrayList<String> resultFromController = null;
@@ -85,13 +82,11 @@ public class SuperController extends Supervisor {
         
         // serversocket for listening to the RL algorithm instruction
         try {
-            superControllerServerSocket = 
-                    new ServerSocket(Util.SUPERCONTROLLER_PORT, 0, InetAddress.getLocalHost());
-            resultServerSocket = 
-                    new ServerSocket(Util.RLANSWER_PORT, 0, InetAddress.getLocalHost());
+            srvRL = new ServerSocket(Util.RL_PORT, 0, InetAddress.getLocalHost());
+            srvController = new ServerSocket(Util.CTRL_PORT, 0, InetAddress.getLocalHost());
+            srvResult = new ServerSocket(Util.RESULT_PORT, 0, InetAddress.getLocalHost());
         } catch (IOException e) {
-            System.err.println("Could not listen on port: "+Util.SUPERCONTROLLER_PORT);
-            System.exit(1);
+            e.printStackTrace();
         }
         
         // instruction and result list initialization
@@ -114,86 +109,147 @@ public class SuperController extends Supervisor {
             // Restore startup configuration for new test
             restoreFromBackup();
             
+            /*
+             * Work with GA to get the chromosome information
+             */
             // Wait and accept connection from RL algorithm
-            try {
-                System.out.println("Waiting for RL algorithm to connect");
-                RLClientSocket = superControllerServerSocket.accept();
-            } catch (IOException e) {
-                System.err.println("Accept failed.");
-                System.exit(1);
-            }
-            // Preapre to read and write into RL's socket
-            outRL = new PrintWriter(RLClientSocket.getOutputStream(), true);
-            inRL = new BufferedReader( new InputStreamReader(RLClientSocket.getInputStream()));
+            System.out.println("WAINTING FOR RL");
+            Socket RLSocket = waitForRL();
+            // Read chromosome from RL algorithm through RLSocket
+            System.out.println("READING FROM RL");
+            readRL(RLSocket);
+            // Close the socket, we don't use it anymore
+            System.out.println("CLOSING RL");
+            RLSocket.close();
+            // After reading instrution from RL algorithm, prepare it to send to Controller
+            prepareToServeController();
             
-            // tell the RL algorithm we are ready to get instruction
-            outRL.println("READY");
-            System.out.println("RLAlgorithm instructions request");
+            /*
+             * Work with Controller to execute info in the chromosome
+             */
+            // Wait and accept connection from RL algorithm
+            System.out.println("WAINTING FOR CTRL");
+            Socket ControllerSocket = waitForController();
+            // Read chromosome from RL algorithm through RLSocket
+            System.out.println("SENDING TO CTRL");
+            sendController(ControllerSocket);
+            // Close the socket, we don't use it anymore
+            System.out.println("CLOSING CTRL");
+            ControllerSocket.close();
+            // After the controller finish working, prepare to send result to GA
+            prepareToServeRL();
             
-            // read RL's instruction into
-            String inputLine;
-            while((inputLine = inRL.readLine()) != null){
-                instructionsFromRL.add(inputLine);
-            }
-            System.out.println("Received instructions "+Util.printArrayList(instructionsFromRL));
+            /*
+             * Work with GA and send them the result
+             */
+            // Wait and accept connection from RL algorithm
+            System.out.println("WAITING FOR RSLT");
+            Socket ResultSocket = waitForResult();
+            // Read chromosome from RL algorithm through RLSocket
+            System.out.println("SENDING TO RSLT");
+            sendResult(ResultSocket);
+            // Close the socket, we don't use it anymore
+            System.out.println("CLOSING RSLT");
+            ResultSocket.close();
+            // After reading instrution from RL algorithm, prepare it to send to Controller
             
-            // format instructionsFromRL into instructionsToController
-            for(String instruction : instructionsFromRL){
-                instructionsToController.add(instruction);
-            }
-            
-            // prepare to send instruction for controller socket
-            controllerClientSocket = new Socket(InetAddress.getLocalHost(), Util.CONTROLLER_PORT);
-            outController = new PrintWriter(controllerClientSocket.getOutputStream(), true);
-            inController = new BufferedReader( new InputStreamReader(controllerClientSocket.getInputStream()));
-            
-            // ask if we can send instruction to controller
-            inController.readLine();
-            
-            // send the instructions
-            for(String instruction : instructionsToController){
-                outController.println(instruction);
-            }
-            
-            // prepare to send the result to RL algorithm
-            resultToRL = getSimulationResult();
-            
-            // Put it into the server result so the client would now how did we do
-            // Wait for the RL algorithm to request answer
-            try {
-                System.out.println("Waiting for RL algorithm to request answer");
-                RLClientSocket = resultServerSocket.accept();
-            } catch (IOException e) {
-                System.err.println("Accept failed.");
-                System.exit(1);
-            }
-            outRL = new PrintWriter(RLClientSocket.getOutputStream(), true);
-            for(String result : resultToRL){
-                outRL.println(result);
-            }
-            
-            // close PrintWriters
-            outRL.close();
-            outController.close();
-            // close BufferReaders
-            inRL.close();
-            inController.close();
-            // close Sockets
-            RLClientSocket.close();
-            controllerClientSocket.close();
-            // clearing all list
-            instructionsFromRL.clear();
-            instructionsToController.clear();
-            resultFromController.clear();
-            resultToRL.clear();
             
         } while (step(Util.TIME_STEP) != -1);
     }
     
+    // ***************************************************
+    private Socket waitForRL() throws IOException{
+        return srvRL.accept();
+    }
+    
+    private void readRL(Socket socket) throws IOException{
+        PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+        BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        
+        // Tell RL we are ready
+        out.println("READY");
+        
+        // read the instruction
+        String inputLine;
+        while((inputLine = in.readLine()) != null){
+            instructionsFromRL.add(inputLine);
+        }
+        System.out.println("Received instructions "+Util.printArrayList(instructionsFromRL));
+        
+        in.close(); out.close();
+    }
+    
+    private void prepareToServeController(){
+        // format instructionsFromRL into instructionsToController
+        for(String instruction : instructionsFromRL){
+            instructionsToController.add(instruction);
+        }
+    }
+    
+    // ***************************************************
+    private Socket waitForController() throws IOException{
+        return srvController.accept();
+    }
+    
+    private void sendController(Socket socket) throws IOException{
+        PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+        BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        
+        System.out.println("Send instruction to controller");
+        // Tell Controller about our instruction
+        for(String instruction : instructionsToController){
+            out.println(instruction);
+        }
+        
+        // wait until controller is done
+        System.out.println("Waiting for controller's feedback");
+        in.readLine();
+        System.out.println("Done simulation");
+        
+        in.close(); out.close();
+    }
+    
+    private void prepareToServeRL() {
+        resultToRL = getSimulationResult();
+    }
+    
+    private ArrayList<String> getSimulationResult(){
+        ArrayList<String> result = new ArrayList<String>();
+        for(double value : expData.getGrabberPosition()){
+            result.add(Double.toString(value));
+        }
+        for(double value : expData.getThingsPosition()){
+            result.add(Double.toString(value));
+        }
+        for(double value : expData.getPlacePosition()){
+            result.add(Double.toString(value));
+        }
+        return result;
+    }
+    
+    // ***************************************************
+    private Socket waitForResult() throws IOException{
+        return srvResult.accept();
+    }
+    
+    private void sendResult(Socket socket) throws IOException{
+        PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+        
+        // Tell Controller about our instruction
+        for(String res : resultToRL){
+            out.println(res);
+        }
+        
+        out.close();
+    }
+    
+    //****************************************************
     public void finalize(){
         super.finalize();
         try {
-            superControllerServerSocket.close();
+            srvController.close();
+            srvRL.close();
+            srvResult.close();
         } catch (IOException ex) {
             Logger.getLogger(SuperController.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -213,19 +269,6 @@ public class SuperController extends Supervisor {
         }
     }
     
-    private ArrayList<String> getSimulationResult(){
-        ArrayList<String> result = new ArrayList<String>();
-        for(double value : expData.getGrabberPosition()){
-            result.add(Double.toString(value));
-        }
-        for(double value : expData.getThingsPosition()){
-            result.add(Double.toString(value));
-        }
-        for(double value : expData.getPlacePosition()){
-            result.add(Double.toString(value));
-        }
-        return result;
-    }
     
     private void setStatus(String defName, Status status){
         Node node = getFromDef(defName);

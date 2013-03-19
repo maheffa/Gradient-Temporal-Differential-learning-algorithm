@@ -20,12 +20,12 @@ import org.jgap.IChromosome;
  */
 public class Util {
     
-    public static int TIME_STEP = 16;
+    public static int TIME_STEP = 4*16;
     public static String REQUEST_BACKUP = "request_backup";
     public static String ALLOW_BACKUP = "allow_backup";
     public static String REQUEST_RESTORE = "request_restore";
     public static String ALLOW_RESTORE = "allow_restore";
-    public static int CONTROLLER_PORT = 55555, SUPERCONTROLLER_PORT = 55556, RLANSWER_PORT = 55557;
+    public static int CTRL_PORT = 55555, RL_PORT = 55556, RESULT_PORT = 55557;
     
     private Util(){
         

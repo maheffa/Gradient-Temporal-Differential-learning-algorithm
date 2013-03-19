@@ -23,7 +23,8 @@ public class GeneticAlgorithm extends Thread {
     @Override
     public void run() {
         try {
-            Thread.sleep(1000);
+            // Let the server start for 3 sec
+            Thread.sleep(3000);
             System.out.println("[GA] Launching genetic algorithm");
             
             // Start with a DefaultConfiguration, which comes setup with the

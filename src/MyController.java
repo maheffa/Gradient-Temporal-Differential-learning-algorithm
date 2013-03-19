@@ -11,9 +11,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -23,11 +25,7 @@ public class MyController extends Robot {
     private Base base = null;
     private Arm arm = null;
     private Gripper gripper = null;
-    private ServerSocket controllerServerSocket = null;
-    private Socket superControllerClientSocket = null;
     private ArrayList<String> instructionFromSuperController = null;
-    private BufferedReader inSuperController = null;
-    private PrintWriter outSuperController = null;
     
     public MyController() {
         super();
@@ -45,56 +43,44 @@ public class MyController extends Robot {
                 getServo("arm5")
                 );
         
-        // serversocket for listening to the SuperController's instruction
-        try {
-            controllerServerSocket = 
-                    new ServerSocket(Util.CONTROLLER_PORT, 0, InetAddress.getLocalHost());
-        } catch (IOException e) {
-            System.err.println("Could not listen on port: "+Util.CONTROLLER_PORT);
-            System.exit(1);
-        }
-        
         // instruction list initialization
         instructionFromSuperController = new ArrayList<String>();
                 
     }
     
-    public void run() throws IOException {
-        do {
-            try {
-                System.out.println("Waiting for serversocket to connect");
-                superControllerClientSocket = controllerServerSocket.accept();
-            } catch (IOException e) {
-                System.err.println("Accept failed.");
-                System.exit(1);
-            }
-            // Preapre to read and write into RL's socket
-            inSuperController = new BufferedReader( new InputStreamReader(superControllerClientSocket.getInputStream()));
-            outSuperController = new PrintWriter(superControllerClientSocket.getOutputStream(), true);
-            
-            // Tell superController, we are ready
-            outSuperController.println("READY");
-            System.out.println("SuperController instructions request");
-            
-            // Read the instructions
-            String inputLine;
-            while((inputLine = inSuperController.readLine()) != null){
-                instructionFromSuperController.add(inputLine);
-            }
-            System.out.println("Received instructions "+Util.printArrayList(instructionFromSuperController));
-            
-            // Begin the job
-            controllerJob(instructionFromSuperController);
-            
-            // Tell SuperController that we're done
-            outSuperController.println("Done");
-            
-            // closing
-            inSuperController.close();
-            superControllerClientSocket.close();
+    public void run() throws IOException, InterruptedException {
+        while (step(Util.TIME_STEP) != -1) {
+            getAJob();
             instructionFromSuperController.clear();
-            
-        } while (step(Util.TIME_STEP) != -1);
+        }
+        System.out.println("help");
+    }
+    
+    private void getAJob() throws UnknownHostException, IOException, ConnectException{
+        // TODO: Double check this method
+        
+        // Connect to controllerserver and send instruction from chromosome
+        System.out.println("Creating socket");
+        Socket socket = new Socket(InetAddress.getLocalHost(), Util.CTRL_PORT);
+        PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+        BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        
+        // Wait until ControllerServer is ready
+        String inputLine;
+        while((inputLine = in.readLine()) != null){
+            instructionFromSuperController.add(inputLine);
+        }
+        
+        // Do the job
+        controllerJob(instructionFromSuperController);
+                
+        // Tell controllerServer we're done
+        out.println("Done");
+        
+        // Closing
+        out.close();
+        in.close();
+        socket.close();
     }
     
     private void controllerJob(ArrayList<String> instructionFromSuperController){
@@ -106,7 +92,7 @@ public class MyController extends Robot {
         step(Util.TIME_STEP);
     }
     
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         MyController controller = new MyController();
         try {
             System.out.println("Launching controller");
