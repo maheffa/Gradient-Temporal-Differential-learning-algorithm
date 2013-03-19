@@ -48,11 +48,18 @@ public class MyController extends Robot {
                 
     }
     
-    public void run() throws IOException, InterruptedException {
-        while (step(Util.TIME_STEP) != -1) {
-            getAJob();
-            instructionFromSuperController.clear();
-        }
+    public void run() {
+        step(Util.TIME_STEP);
+        do {
+            try {
+                getAJob();
+                instructionFromSuperController.clear();
+            } catch (UnknownHostException ex) {
+                Logger.getLogger(MyController.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (IOException ex) {
+                Logger.getLogger(MyController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        } while (step(Util.TIME_STEP) != -1);
         System.out.println("help");
     }
     
@@ -94,12 +101,7 @@ public class MyController extends Robot {
     
     public static void main(String[] args) throws InterruptedException {
         MyController controller = new MyController();
-        try {
-            System.out.println("Launching controller");
-            controller.run();
-        } catch (IOException ex) {
-            System.err.println("Error while launching controller");
-            ex.printStackTrace();
-        }
+        System.out.println("Launching controller");
+        controller.run();
     }
 }
