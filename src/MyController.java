@@ -77,50 +77,55 @@ public class MyController extends Robot {
         instructionFromSuperController = new ArrayList<String>();
         
         // initialize checker
-        checker = new ControllerServerChecker(this);
-        checker.run();
+        /*checker = new ControllerServerChecker(this);
+        checker.run();*/
     }
     
     public void run() {
+        step(Util.TIME_STEP);
         do {
-            if(controllerClient != null ) try {
-                getAJob();
-                instructionFromSuperController.clear();
-            } catch (IOException ex) {
+            //if(controllerClient != null ) try {
+                //getAJob();
+                //instructionFromSuperController.clear();
+            /*} catch (IOException ex) {
                 Logger.getLogger(MyController.class.getName()).log(Level.SEVERE, null, ex);
             }
             else{
                 continue;
-            }
+            }*/
+            System.out.println("1");
+            System.out.println("2");
+            System.out.println("3");
+            System.out.println("4");
         } while (step(Util.TIME_STEP) != -1);
         System.out.println("help");
     }
     
-    private void getAJob() throws IOException{
+    private void getAJob(){// throws IOException{
         // TODO: Double check this method
         System.out.println("GOT A JOOOOB!!!");
         // Connect to controllerserver and send instruction from chromosome
-        PrintWriter out = new PrintWriter(controllerClient.getOutputStream(), true);
-        BufferedReader in = new BufferedReader(new InputStreamReader(controllerClient.getInputStream()));
-        
+        /*PrintWriter out = new PrintWriter(controllerClient.getOutputStream(), true);
+        BufferedReader in = new BufferedReader(new InputStreamReader(controllerClient.getInputStream()));*/
+        /*        
         // Wait until ControllerServer is ready
-        String inputLine;
+        String inputLine;*/
         System.out.println("Receiving info from server");
-        while((inputLine = in.readLine()) != null){
+        /*while((inputLine = in.readLine()) != null){
             instructionFromSuperController.add(inputLine);
             System.out.println(inputLine);
         }
         
         // Do the job
-        controllerJob(instructionFromSuperController);
+        controllerJob(instructionFromSuperController);*/
         
         // Tell controllerServer we're done
-        out.println("Done");
+        /*out.println("Done");
         
         // Closing
         out.close();
         in.close();
-        controllerClient.close();
+        controllerClient.close();*/
     }
     
     private void controllerJob(ArrayList<String> instructionFromSuperController){

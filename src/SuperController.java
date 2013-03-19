@@ -96,8 +96,8 @@ public class SuperController extends Supervisor {
         resultToRL = new ArrayList<String>();
         
         // launch the RL algorithm's thread
-        RLAlgorithm = new GeneticAlgorithm();
-        RLAlgorithm.start();
+        /*RLAlgorithm = new GeneticAlgorithm();
+        RLAlgorithm.start();*/
     }
     
     public void run(){
@@ -106,59 +106,62 @@ public class SuperController extends Supervisor {
         createBackup();
         
         do {
-            try {
+            //try {
                 // Restore startup configuration for new test
-                restoreFromBackup();
+                //restoreFromBackup();
                 
                 /*
                  * Work with GA to get the chromosome information
                  */
                 // Wait and accept connection from RL algorithm
-                System.out.println("WAINTING FOR RL");
-                Socket RLSocket = waitForRL();
+                //System.out.println("WAINTING FOR RL");
+                //Socket RLSocket = waitForRL();
                 // Read chromosome from RL algorithm through RLSocket
-                System.out.println("READING FROM RL");
-                readRL(RLSocket);
+                //System.out.println("READING FROM RL");
+                //readRL(RLSocket);
                 // Close the socket, we don't use it anymore
-                System.out.println("CLOSING RL");
-                RLSocket.close();
+                //System.out.println("CLOSING RL");
+                //RLSocket.close();
                 // After reading instrution from RL algorithm, prepare it to send to Controller
-                prepareToServeController();
+                //prepareToServeController();
                 
                 /*
                  * Work with Controller to execute info in the chromosome
                  */
                 // Wait and accept connection from RL algorithm
-                step(Util.TIME_STEP);
-                System.out.println("WAINTING FOR CTRL");
-                Socket ControllerSocket = waitForController();
+                //step(Util.TIME_STEP);
+                //System.out.println("WAINTING FOR CTRL");
+                //Socket ControllerSocket = waitForController();
                 // Read chromosome from RL algorithm through RLSocket
-                System.out.println("SENDING TO CTRL");
-                sendController(ControllerSocket);
+                //System.out.println("SENDING TO CTRL");
+                //sendController(ControllerSocket);
                 // Close the socket, we don't use it anymore
-                System.out.println("CLOSING CTRL");
-                ControllerSocket.close();
+                //System.out.println("CLOSING CTRL");
+                //ControllerSocket.close();
                 // After the controller finish working, prepare to send result to GA
-                prepareToServeRL();
+                //prepareToServeRL();
                 
                 /*
                  * Work with GA and send them the result
                  */
                 // Wait and accept connection from RL algorithm
-                System.out.println("WAITING FOR RSLT");
-                Socket ResultSocket = waitForResult();
+                //System.out.println("WAITING FOR RSLT");
+                //Socket ResultSocket = waitForResult();
                 // Read chromosome from RL algorithm through RLSocket
-                System.out.println("SENDING TO RSLT");
-                sendResult(ResultSocket);
+                //System.out.println("SENDING TO RSLT");
+                //sendResult(ResultSocket);
                 // Close the socket, we don't use it anymore
-                System.out.println("CLOSING RSLT");
-                ResultSocket.close();
+                //System.out.println("CLOSING RSLT");
+                //ResultSocket.close();
                 // After reading instrution from RL algorithm, prepare it to send to Controller
-            } catch (IOException ex) {
+            /*} catch (IOException ex) {
                 Logger.getLogger(SuperController.class.getName()).log(Level.SEVERE, null, ex);
-            }
+            }*/
             
-            
+            System.out.println("1");
+            System.out.println("2");
+            System.out.println("3");
+            System.out.println("4");
         } while (step(Util.TIME_STEP) != -1);
     }
     
