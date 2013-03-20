@@ -1,35 +1,37 @@
 
 import com.cyberbotics.webots.controller.Field;
+import com.cyberbotics.webots.controller.Node;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.jgap.FitnessFunction;
 import org.jgap.Gene;
 import org.jgap.IChromosome;
 
 class ExperimentData{
     
-    private final String[] elementsDEF = {"Grabber", "GrabMe", "PLATE"};
-    private Field[] translations = null;
+    private Node grabber, grabme, plate;
     private SuperController superController = null;
     
     public ExperimentData(SuperController superController){
         this.superController = superController;
-        translations = new Field[]{
-            superController.getFromDef(this.elementsDEF[0]).getField("translation"),
-            superController.getFromDef(this.elementsDEF[1]).getField("translation"),
-            superController.getFromDef(this.elementsDEF[2]).getField("translation")
-        };
+        grabber = superController.getFromDef("Grabber");
+        grabme = superController.getFromDef("GrabMe");
+        plate = superController.getFromDef("PLATE");
     }
     
     public double[] getGrabberPosition(){
-        return translations[0].getSFVec3f();
+        return grabber.getPosition();
     }
     
     public double[] getThingsPosition(){
-        return translations[1].getSFVec3f();
+        return grabme.getField("translation").getSFVec3f();
     }
     
     public double[] getPlacePosition(){
-        return translations[2].getSFVec3f();
+        return plate.getField("translation").getSFVec3f();
     }
 }
 
@@ -43,20 +45,43 @@ public class InstructionFitnessFunction extends FitnessFunction {
         super();
         this.supercontroller = supercontroller;
         data = new ExperimentData(supercontroller);
+        try {
+            File fl = new File(Util.resultFilePath);
+            if(!fl.exists())
+                fl.createNewFile();
+        } catch (IOException ex) {
+            Logger.getLogger(InstructionFitnessFunction.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
     
     @Override
     protected double evaluate(IChromosome ic) {
-        System.out.println("[GA] Evaluation of chromosome "+Util.printChromosome(ic));
-        // To analyze the chromosome, we have to simulate it
-        executeChromosomeOnSuperController(ic);
+        double result;
+        do{
+            System.out.println("[GA] Evaluate chromosome "+Util.InstructionChromosome(fromChromosomeToInstruction(ic)));
+            // To analyze the chromosome, we have to simulate it
+            executeChromosomeOnSuperController(ic);
+            synchronized (this) {
+                try {
+                    //System.out.println("gonna wait");
+                    this.wait();
+                } catch (InterruptedException ex) {
+                }
+            }
+            //System.out.println("notified");
+                
+            // Evaluate the result
+            System.out.print("[GA] chromosome "
+                    +Util.InstructionChromosome(fromChromosomeToInstruction(ic))
+                    +" fitness = ");
+            result = evaluateSuperControllerResult(supercontroller.results);
+            System.out.println(result);
+            //if(result == Double.MIN_NORMAL) System.out.println("REEVALUATION");
+        } while(result==Double.MIN_NORMAL);
         
-        // Read then the chromosome result (it will wait until something from resultServer is readen)
-        obtainChromosomeResultFromSuperController();
-        
-        // Evaluate the result
-        double result = evaluateResultFromSuperController();
-        
+        System.out.println(result);
+        if(supercontroller.results!=null)
+            supercontroller.results.clear();
         // Return the evaulation result
         return result;
         
@@ -64,8 +89,8 @@ public class InstructionFitnessFunction extends FitnessFunction {
     
     private void executeChromosomeOnSuperController(IChromosome ic){
         // Wait until the current simulation finished
-        while(supercontroller.isSimulating()) if(Thread.interrupted()) return;
-        
+        while(supercontroller.isSimulating()) if(Thread.interrupted()) ;
+
         // Interprete chromosome into instruction set and simulate it
         supercontroller.simulate(fromChromosomeToInstruction(ic));
     }
@@ -79,32 +104,14 @@ public class InstructionFitnessFunction extends FitnessFunction {
         return instructions;
     }
     
-    private void obtainChromosomeResultFromSuperController(){
-        // TODO: loop until simulation is done
-        
-        // TODO: read the result
-    }
-    
-    private double evaluateResultFromSuperController(){
-        // TODO: evaluate the result to give the fitness value
-        return Math.random()+1;
-    }
-    
-    public static double evaluateSuperControllerResult(ArrayList<String> result){
-        /*
-         * TODO: think twice about what should the supercontroller return
-         */
-        // assume that the supercontroller return the grabber's hand position
-        // the things to grab's position
-        // the place where to put the things to grabs position
-        // each 3 consecutive line will be the coorinate of something
-        double[] grabberPosition = getPosition(result, 0);
-        double[] thingsPosition = getPosition(result, 3);
-        double[] placePosition = getPosition(result, 6);
-        
-        // let's say the closer the place and the things position
-        // the better is the value of the fitness function
-        return 100/(1+Util.distance(placePosition, thingsPosition));
+    public double evaluateSuperControllerResult(ArrayList<double[]> result){
+        if(result == null) return Double.MIN_NORMAL;
+        double d1 = Util.distance(result.get(0), result.get(1));
+        double d2 = Util.distance(result.get(2), result.get(3));
+        double d4 = Util.distance(result.get(4), result.get(5));
+        double c = Math.abs(d1-d2);
+        System.out.print("100.0/("+d4+"+1)+"+(+d1<d2?"-"+c+"/10":"10*"+c+" = "));
+        return 1000/(100.0/(d4+1)+(d1<d2?-c/10:10*c));
     }
     
     private static double[] getPosition(ArrayList<String> result, int i){

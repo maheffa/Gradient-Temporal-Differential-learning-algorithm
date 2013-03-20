@@ -1,11 +1,14 @@
 
 import com.cyberbotics.webots.controller.Robot;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import org.jgap.Gene;
 import org.jgap.IChromosome;
-
-
-
 
 
 /*
@@ -17,12 +20,15 @@ import org.jgap.IChromosome;
  *
  * @author Mahefa
  */
+import java.text.DecimalFormat;
 public class Util {
     
-    public static int TIME_STEP = 16;
-    
-    public static String commonFilePath = System.getProperty("java.io.tmpdir")+"webotControllerSupervisor";
-    
+    public static int TIME_STEP = 20*16;
+    public static DecimalFormat df = new DecimalFormat("#.000");
+    public static final String commonFilePath =
+            System.getProperty("java.io.tmpdir")+"webot000";
+    public static final String resultFilePath =
+            System.getProperty("java.io.tmpdir")+"webotRes000";
     private Util(){
         
     }
@@ -66,5 +72,56 @@ public class Util {
         }
     }
     
+    public static void setWaitSupervisor(boolean val){
+        System.setProperty("supervisor_wait", Boolean.toString(val));
+    }
     
+    public static boolean isWaitSupervisor(){
+        return Boolean.parseBoolean(System.getProperty("supervisor_wait"));
+    }
+    
+    public static String InstructionChromosome(double[] instruction){
+        StringBuilder builder = new StringBuilder();
+        builder.append("["+df.format(instruction[0]));
+        for(int i=1; i<instruction.length; i++)
+            builder.append(":"+df.format(instruction[i]));
+        builder.append("]");
+        return builder.toString();
+    }
+    
+    public static void writeFileResult(double value){
+        try {
+            PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(Util.resultFilePath, true)));
+            out.println(Double.toString(value));
+            out.close();
+        } catch (IOException e) {
+        }
+    }
+    
+    public static double[] readFileResult(boolean cleanAfterReading){
+        ArrayList<String> strVal = new ArrayList<String>();
+        try{
+            BufferedReader br = new BufferedReader(new FileReader(Util.resultFilePath));
+            String inputLine;
+            while((inputLine = br.readLine()) != null){
+                strVal.add(inputLine);
+            }
+            br.close();
+            if(strVal.size() == 0) return null;
+            double[] val = new double[strVal.size()];
+            int i=0;
+            for(String s : strVal){
+                val[i++] = Double.parseDouble(s);
+            }
+            if(cleanAfterReading){
+                PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(Util.resultFilePath, false)));
+                out.print("");
+                out.close();
+            }
+            return val;
+        } catch (IOException e){
+            e.printStackTrace();
+        }
+        return null;
+    }
 }
