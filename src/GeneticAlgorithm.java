@@ -20,18 +20,13 @@ public class GeneticAlgorithm extends Thread {
     private Chromosome sampleChromosome = null;
     private Genotype population = null;
     
-    @Override
-    public void run() {
+    public GeneticAlgorithm(SuperController supercontroller){
         try {
-            // Let the server start for 3 sec
-            Thread.sleep(3000);
-            System.out.println("[GA] Launching genetic algorithm");
-            
             // Start with a DefaultConfiguration, which comes setup with the
             conf = new DefaultConfiguration();
             
             // Set the the fitness function (which is InstructionFitnessFunction)
-            fitnessFunction =  new InstructionFitnessFunction();
+            fitnessFunction =  new InstructionFitnessFunction(supercontroller);
             conf.setFitnessFunction(fitnessFunction);
             
             // Generate the gene sample
@@ -45,18 +40,23 @@ public class GeneticAlgorithm extends Thread {
             conf.setPopulationSize(GeneticAlgorithm.POPULATION_SIZE);
             
             // Create random population from the gene and chromosome sample
-            population = Genotype.randomInitialGenotype( conf );
-            
-            // Let the population to evolve
-            for(int i=0; i<GeneticAlgorithm.MAX_EVOLUTION; i++){
-                population.evolve();
-            }
-            
-        } catch (Exception ex) {
+                population = Genotype.randomInitialGenotype( conf );
+        } catch (InvalidConfigurationException ex) {
             Logger.getLogger(GeneticAlgorithm.class.getName()).log(Level.SEVERE, null, ex);
-        }  
+        }
+            
+        
     }
-
+    
+    @Override
+    public void run() {
+        // Let the population to evolve
+        for(int i=0; i<GeneticAlgorithm.MAX_EVOLUTION; i++){
+            if(Thread.interrupted()) return;
+            population.evolve();
+        }
+    }
+    
     private Gene[] generateSampleGene(Configuration conf){
         try {
             // create the chromosomes's gene sample
@@ -71,5 +71,5 @@ public class GeneticAlgorithm extends Thread {
             return null;
         }
     }
-    
+
 }
