@@ -2,6 +2,7 @@
 import com.cyberbotics.webots.controller.Robot;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -21,6 +22,9 @@ import org.jgap.IChromosome;
  * @author Mahefa
  */
 import java.text.DecimalFormat;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 public class Util {
     
     public static int TIME_STEP = 20*16;
@@ -29,6 +33,10 @@ public class Util {
             System.getProperty("java.io.tmpdir")+"webot000";
     public static final String resultFilePath =
             System.getProperty("java.io.tmpdir")+"webotRes000";
+    public static final String resultGPSFilePath = 
+            System.getProperty("java.io.tmpdir")+"webotGPS000";
+    public static final String resultSensorFilePath = 
+            System.getProperty("java.io.tmpdir")+"webotSensor000";
     private Util(){
         
     }
@@ -95,6 +103,72 @@ public class Util {
             out.println(Double.toString(value));
             out.close();
         } catch (IOException e) {
+        }
+    }
+    
+    public static List<Integer> listToInteger(List<String> str){
+        List<Integer> rslt = new ArrayList<Integer>();
+        for(String s : str){
+            rslt.add(Integer.parseInt(s));
+        }
+        return rslt;
+    }
+    
+    public static List<Boolean> listToBoolean(List<String> str){
+        List<Boolean> rslt = new ArrayList<Boolean>();
+        for(String s : str){
+            rslt.add(Boolean.parseBoolean(s));
+        }
+        return rslt;
+    }
+    
+    public static List<Double> listToDouble(List<String> str){
+        List<Double> rslt = new ArrayList<Double>();
+        for(String s : str){
+            rslt.add(Double.parseDouble(s));
+        }
+        return rslt;
+    }
+    
+    public static List<String> readFileResult(String filePath){
+        try {
+            ArrayList<String> strVals = new ArrayList<String>();
+            BufferedReader br = new BufferedReader(new FileReader(filePath));
+            String inputLine;
+            while((inputLine = br.readLine()) != null){
+                strVals.add(inputLine);
+            }
+            br.close();
+            if(strVals.size() == 0) return null;
+            return strVals;
+        } catch (IOException ex) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return null;
+    }
+    
+    public static void writeFileResult(String filePath, List<Class<?>> list){
+        try {
+            BufferedWriter bw = new BufferedWriter(new FileWriter(filePath));
+            StringBuilder str = new StringBuilder();
+            for(Class<?> el : list){
+                str.append(el.toString());
+            }
+            bw.write(str.toString());
+            bw.close();
+        } catch (IOException ex) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+    
+    public static void cleanFile(String filePath){
+        try {
+            File f = new File(Util.commonFilePath);
+            f.delete();
+            f  = new File(Util.commonFilePath);
+            f.createNewFile();
+        } catch (IOException ex) {
+            Logger.getLogger(Util.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
     

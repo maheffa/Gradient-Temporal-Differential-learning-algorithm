@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -76,6 +77,7 @@ public class MyController extends Robot {
         // Give supercontroller the privilege to run first
         createBackup();
         int counter = 0;
+        
         do {//System.out.println("gone further");
             if(needSimulation()){
                 //restoreFromBackup();
@@ -137,21 +139,12 @@ public class MyController extends Robot {
     }
     
     private void readInstructions(){
-        ArrayList<Double> values = new ArrayList<Double>();
+        List<Double> values;
         try {
-            BufferedReader br = new BufferedReader(new FileReader(Util.commonFilePath));
-            String inputLine;
-            while((inputLine = br.readLine()) != null){
-                values.add(Double.parseDouble(inputLine));
-            }
-            br.close();
-            BufferedWriter bw = new BufferedWriter(new FileWriter(Util.commonFilePath));
-            File f = new File(Util.commonFilePath);
-            f.delete();
-            f  = new File(Util.commonFilePath);
-            f.createNewFile();
+            values = Util.listToDouble(Util.readFileResult(Util.commonFilePath));
+            Util.cleanFile(Util.commonFilePath);
             instructions = null;
-            if(values.size()==0) return;
+            if(values == null) return;
             instructions = new double[values.size()];
             int i=0;
             for(Double val : values){
@@ -179,7 +172,21 @@ public class MyController extends Robot {
     }
     
     public static void main(String[] args) throws InterruptedException {
+        createAllNeededFiles();
         MyController controller = new MyController();
         controller.run();
+    }
+    
+    public static void createAllNeededFiles(){
+        try {
+            File fl ;
+            fl = new File(Util.commonFilePath);
+            if(!fl.exists()) fl.createNewFile();
+            fl = new File(Util.resultFilePath);
+            if(!fl.exists()) fl.createNewFile();
+        } catch (IOException ex) {
+            Logger.getLogger(MyController.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        
     }
 }

@@ -10,32 +10,6 @@ import org.jgap.FitnessFunction;
 import org.jgap.Gene;
 import org.jgap.IChromosome;
 
-class ExperimentData{
-    
-    private Node grabber, grabme, plate;
-    private SuperController superController = null;
-    
-    public ExperimentData(SuperController superController){
-        this.superController = superController;
-        grabber = superController.getFromDef("Grabber");
-        grabme = superController.getFromDef("GrabMe");
-        plate = superController.getFromDef("PLATE");
-    }
-    
-    public double[] getGrabberPosition(){
-        return grabber.getPosition();
-    }
-    
-    public double[] getThingsPosition(){
-        return grabme.getField("translation").getSFVec3f();
-    }
-    
-    public double[] getPlacePosition(){
-        return plate.getField("translation").getSFVec3f();
-    }
-}
-
-
 public class InstructionFitnessFunction extends FitnessFunction {
     
     private SuperController supercontroller = null;

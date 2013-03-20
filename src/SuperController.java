@@ -1,80 +1,44 @@
 
 
 import com.cyberbotics.webots.controller.Node;
-import com.cyberbotics.webots.controller.Servo;
 import com.cyberbotics.webots.controller.Supervisor;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-class BackupNode{
-    private Node n;
-    private double[] translation = null, rotation = null;
-    public BackupNode(Node n){
-        this.n = n;
-    }
-    public void backup(){
-        translation = n.getField("translation").getSFVec3f().clone();
-        rotation = n.getField("rotation").getSFRotation().clone();
-    }
-    public void restore(){
-        n.getField("translation").setSFVec3f(translation.clone());
-        n.getField("rotation").setSFRotation(rotation.clone());
-    }
-}
-
-class KeyObjects{
-    private Node grabber, grabme, plate;
-    SuperController sup;
-    public KeyObjects(SuperController supercontroller){
-        sup = supercontroller;
-        renew();
-    }
-    public void renew(){
-        grabber = sup.getFromDef("ROBOT");
-        grabme = sup.getFromDef("GrabMe");
-        plate = sup.getFromDef("Plate_PH");
-    }
-    public double[] getGrabberPosition(){
-        return grabber.getField("translation").getSFVec3f();
-    }
-    public double[] getGrabmePosition(){
-        return grabme.getField("translation").getSFVec3f();
-    }
-    public double[] getPlatePosition(){
-        return plate.getField("centerOfMass").getSFVec3f();
-    }
+class NodeField{
+    public double[] translation = null;
+    public double[] rotation = null;
 }
 
 public class SuperController extends Supervisor {
     
-    private Map<String, BackupNode> backup = null;
-    private String[] objectDEF = null, transformDEF = null, servoName = null;
-    private Thread RLAlgorithm = null;
-    private double[] instructions = null;
-    ArrayList<double[]> results = null;
-    KeyObjects keyObject = null;
-    private boolean simulating = false;
     public InstructionFitnessFunction fitness = null;
+    private Map<String, NodeField> backup = null;
+    private Map<String, List> results = null;
+    private double[] instructions = null;
+    private String[] objectDEFs = null;
+    private Thread RLAlgorithm = null;
     
     public SuperController() {
         super();
-        // array of string containing all DEF tag of devices on webot world
-        objectDEF = new String[]{"ROBOT", "GrabMe"};
-        // map for storing the initial configuration
-        backup = new HashMap<String, BackupNode>();
+        // array containing DEF of element to backup
+        objectDEFs = new String[]{"ROBOT", "GrabMe"};
+        // dictionnary for storing fields value
+        backup = new HashMap<String, NodeField>();
         // launch the RL algorithm's thread
         RLAlgorithm = new GeneticAlgorithm(this);
         RLAlgorithm.start();
-        // initialize key objects
-        keyObject = new KeyObjects(this);
+        // dicitonary for results
+        // it should contain a pair <"Name of the device", it's value during each step>
+        results = new HashMap<String, List>();
     }
     
     public void run(){
@@ -82,54 +46,54 @@ public class SuperController extends Supervisor {
         // Backup startup configuration
         createBackup();
         int counter = 0;
-        //Util.passive_wait(this, 6.5);
+        
         do {
-            //System.out.println("yep, further");
-            while(instructions == null);
-            simulating = true;
-            results = new ArrayList<double[]>();
-            //System.out.println("CHROMOSOME "+counter+++" = "+Util.InstructionChromosome(instructions));
+            synchronized (this){
+                try {
+                    // wait untill the instruction array is ready
+                    this.wait();
+                } catch (InterruptedException ex) {
+                    Logger.getLogger(SuperController.class.getName()).log(Level.SEVERE, null, ex);
+                }
+            }
+            
+            System.out.println("Received chromosome No "+counter+++" : "+Util.InstructionChromosome(instructions));
             // Restore startup configuration for new test
             restoreFromBackup();
             simulationPhysicsReset();
             
-            // write instruction into file
-            // then call step so the controller can work with the data
+            // write instruction into file, then step along with robot controller
             simulateOnController();
-            // record data
+            
+            // simulate and record result into result dictionary
+            List<double[]> toGrabPosition = new ArrayList<double[]>();
+            List<double[]> robotPosition = new ArrayList<double[]>();
+            
             System.out.println(">>>> Initializing");
             Util.passive_wait(this, 1.5);
-            keyObject.renew();
-            results.add(keyObject.getGrabberPosition());
-            results.add(keyObject.getGrabmePosition());
-            System.out.println("grab-grabber distance = "
-                    +Util.distance(results.get(0), results.get(1))
-                    +" "+Arrays.toString(results.get(0))+":"
-                    +Arrays.toString(results.get(1)));
+            toGrabPosition.add(getPosition("GrabMe"));;
+            robotPosition.add(getPosition("ROBOT"));
+
             System.out.println(">>>> Positioning");
             Util.passive_wait(this, 1.5);
-            keyObject.renew();
-            results.add(keyObject.getGrabberPosition());
-            results.add(keyObject.getGrabmePosition());
-            System.out.println("grab-grabber distance = "
-                    +Util.distance(results.get(2), results.get(3))
-                    +" "+Arrays.toString(results.get(2))+":"
-                    +Arrays.toString(results.get(3)));
+            toGrabPosition.add(getPosition("GrabMe"));;
+            robotPosition.add(getPosition("ROBOT"));
+
             System.out.println(">>>> Picking");
             Util.passive_wait(this, 1.0);
+            toGrabPosition.add(getPosition("GrabMe"));;
+            robotPosition.add(getPosition("ROBOT"));
+
             System.out.println(">>>> Bringing");
             Util.passive_wait(this, 1.0);
+            toGrabPosition.add(getPosition("GrabMe"));;
+            robotPosition.add(getPosition("ROBOT"));
+
             System.out.println(">>>> Puting");
             Util.passive_wait(this, 1.5);
-            keyObject.renew();
-            results.add(keyObject.getPlatePosition());
-            results.add(keyObject.getGrabmePosition());
-            System.out.println("plate-grab distance = "
-                    +Util.distance(results.get(4), results.get(5))
-                    +" "+Arrays.toString(results.get(4))+":"
-                    +Arrays.toString(results.get(5)));
-            doneSimulation();
-            
+            toGrabPosition.add(getPosition("GrabMe"));;
+            robotPosition.add(getPosition("ROBOT"));
+
             synchronized (((GeneticAlgorithm)RLAlgorithm).fitnessFunction){
                 ((GeneticAlgorithm)RLAlgorithm).fitnessFunction.notify();
             }
@@ -141,33 +105,15 @@ public class SuperController extends Supervisor {
         RLAlgorithm.interrupt();
     }
     
-    private boolean needSimulation(){
-        //System.out.println("Need to simulate");
-        return instructions != null;
-    }
-    
-    private void doneSimulation(){
-        instructions = null;
-    }
-    
-    public boolean isSimulating(){
-        return instructions != null;
-    }
-    
     public void simulate(double[] instructions){
-        //System.out.println("Got to simulate");
         this.instructions = instructions;
     }
     
     private void simulateOnController(){
         // set data file
         try {
-            File fl = new File(Util.commonFilePath);
-            if(!fl.exists()) {
-                System.out.println("created "+Util.commonFilePath);
-                fl.createNewFile();
-            }
-            BufferedWriter bw = new BufferedWriter(new FileWriter(fl));
+            BufferedWriter bw = new BufferedWriter(
+                    new FileWriter(Util.commonFilePath));
             for(double val : instructions){
                 bw.write(Double.toString(val));
                 bw.newLine();
@@ -176,29 +122,33 @@ public class SuperController extends Supervisor {
         } catch (IOException ex) {
             Logger.getLogger(SuperController.class.getName()).log(Level.SEVERE, null, ex);
         }
-        System.out.println("Got sim instructions : ");//+Arrays.toString(instructions));
     }
     
     private void createBackup(){
-        System.out.println("Creating backup");
-        for(String def : objectDEF){
-            BackupNode bn = new BackupNode(getFromDef(def));
-            bn.backup();
-            backup.put(def, bn);
+        for(String def : objectDEFs){
+            Node node = getFromDef(def);
+            NodeField nf = new NodeField();
+            nf.translation = node.getField("translation").getSFVec3f().clone();
+            nf.rotation = node.getField("rotation").getSFRotation().clone();
+            backup.put(def, nf);
         }
     }
     
     private void restoreFromBackup(){
-        System.out.println("Restoring from backup");
-        for(BackupNode bn : backup.values()){
-            bn.restore();
+        for(String def : backup.keySet()){
+            Node node = getFromDef(def);
+            NodeField nf = backup.get(def);
+            node.getField("translation").setSFVec3f(nf.translation.clone());
+            node.getField("rotation").setSFRotation(nf.rotation.clone());
         }
     }
     
+    private double[] getPosition(String def){
+        return getFromDef(def).getField("translation").getSFVec3f().clone();
+    }
     
     public static void main(String[] args) {
         SuperController controller = new SuperController();
-        System.out.println("Launching supercontroller");
         controller.run();
         
     }
