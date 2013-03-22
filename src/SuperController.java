@@ -154,9 +154,12 @@ public class SuperController extends Supervisor {
     private void simulateOnController(){
         // set data file
         List<Double> l = new ArrayList<Double>();
+        double[] v = getPosition("GrabMe");
         // send the bottle position first
-        for(double val : getPosition("GrabMe"))
-            l.add(val);
+        for(double val : v){
+            System.out.println("Down "+val);
+            l.add(Double.valueOf(val));
+        }
         // then the instruction
         System.out.println("CHROMOSOME "+Util.InstructionChromosome(instructions));
         for(double val : instructions)
@@ -184,6 +187,7 @@ public class SuperController extends Supervisor {
     }
     
     private double[] getPosition(String def){
+        //System.out.println("[TAG] ["+def+"] = "+Arrays.toString(getFromDef(def).getField("translation").getSFVec3f()));
         return getFromDef(def).getField("translation").getSFVec3f().clone();
     }
     

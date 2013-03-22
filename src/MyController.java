@@ -129,6 +129,7 @@ public class MyController extends Robot {
                 
                 // stop and pick
                 base.reset();
+                arm.setPosition(null, null, null, adjustArm(), null);
                 gripper.grip();
                 System.out.println(">>>> Picking");
                 //step(Util.TIME_STEP); 
@@ -169,10 +170,14 @@ public class MyController extends Robot {
     private double adjustArm(){
         double[] gpsPos = gps.getValues();
         double[] OM = new double[3];
+        System.out.println("[GPS] "+Arrays.toString(gpsPos));
+        System.out.println("[OBJ] "+Arrays.toString(objPos));
         for(int i=0; i<3; i++) OM[i] = objPos[i]-gpsPos[i];
         double angle = Util.getZangle(OM);
+        System.out.println("[angle] OM = "+angle+" - ARM = "+(instructions[1]+instructions[2]));
         double diffAngle = angle - (instructions[1]+instructions[2]);
-        return diffAngle;
+        System.out.println("[angle] moving "+diffAngle);
+        return diffAngle+Math.PI;
     }
     
     private boolean needSimulation() {
@@ -193,8 +198,14 @@ public class MyController extends Robot {
         instructions = new double[values.size()-3];
         objPos = new double[3];
         int i=0;
-        while(i<3) objPos[i++] = values.get(i);
-        while(i<values.size()) instructions[(i++)-3] = values.get(i);
+        while(i<3) {
+            objPos[i] = values.get(i);
+            i++;
+        }
+        while(i<values.size()) {
+            instructions[(i)-3] = values.get(i);
+            i++;
+        }
     }
     
     private void createBackup(){

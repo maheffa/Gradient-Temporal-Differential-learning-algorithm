@@ -77,7 +77,7 @@ public class Util {
     public static double getZangle(double[] vect){
         double length = Util.distance(vect, new double[]{0.,0.,0.});
         double z = vect[2];
-        double x = Math.sqrt(length*length-z*z);
+        double x = Math.sqrt(length*length-z*z)*Math.signum(vect[0]);
         double alfa;
         if(z==0){
             alfa = x>0 ? Math.PI/2 : -Math.PI/2;
