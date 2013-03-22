@@ -20,8 +20,7 @@ public class Base {
     }
     
     public void setWheelSpeeds(double speed){
-        for(int i=0; i<4; i++)
-            setWheelVelocity(i, speed);
+        this.SPEED = speed;
     }
     
     public void setWheelSpeeds(double[] velocity){

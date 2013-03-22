@@ -26,10 +26,10 @@ public class Arm {
     public void arm_set_height(int height){
         switch(height){
             case ARM_BACK_PLATE_HIGH:
-                setPosition(0.0, 0.678, 0.682, 1.74, 0.0);
+                setPosition(0.0, 0.678, 0.682, 1.74, 1.);
                 break;
             case ARM_BACK_PLATE_LOW:
-                setPosition(0.0, 0.92, 0.42, 1.78, 0.0);
+                setPosition(0.0, 0.8, 0.2, 1.7, 1.);
                 break;
         }
     }
