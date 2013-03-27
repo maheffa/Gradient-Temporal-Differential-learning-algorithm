@@ -1,5 +1,3 @@
-
-
 // File:          MyController.java
 // Date:
 // Description:
@@ -37,18 +35,18 @@ public class MyController extends Robot {
     private Base base = null;
     private Arm arm = null;
     private Gripper gripper = null;
-    private GPS gps = null;
+    private GPS[] gps = null;
     private TouchSensor[] touchsensor = null;
     private Emitter emitter = null;
-    private double[] instructions = null, objPos = null;
+    private double[] instructions = null, objPos = null, robotPos = null;
     private Map<String, BackupServo> backup = null;
-    private boolean first = true;
+    private boolean endEpisode = false;
     String[] servoName = new String[] {
-            "finger1", "finger2", "arm1", "arm2", "arm3", "arm4", "arm5",
-            "wheel1", "wheel2", "wheel3", "wheel4"
-        };
+        "finger1", "finger2", "arm1", "arm2", "arm3", "arm4", "arm5",
+        "wheel1", "wheel2", "wheel3", "wheel4"
+    };
     private int counter = 0;
-        
+    
     public MyController() {
         super();
         
@@ -56,8 +54,7 @@ public class MyController extends Robot {
         // Initialize the gripper
         gripper = new Gripper(
                 getServo("finger1"),
-                getServo("finger2")
-                );
+                getServo("finger2"));
         // then the arm
         arm = new Arm(
                 getServo("arm1"),
@@ -74,8 +71,11 @@ public class MyController extends Robot {
                 getServo("wheel4")
                 );
         // then the GPS
-        gps = getGPS("finger_gps");
-        gps.enable(100);
+        gps = new GPS[4];
+        for(int i=0; i<4; i++) {
+            gps[i] = getGPS("gps"+Integer.toString(i));
+            gps[i].enable(100);
+        }
         // then the sensors
         touchsensor = new TouchSensor[]{
             getTouchSensor("finger_sensor1"), getTouchSensor("finger_sensor2")};
@@ -85,6 +85,8 @@ public class MyController extends Robot {
         emitter = getEmitter("emitter");
         // prepare to backup
         backup = new HashMap<String, BackupServo>();
+        writeSetting();
+        writePosition();
     }
     
     public void run() {
@@ -104,59 +106,22 @@ public class MyController extends Robot {
                 List<double[]> gpsPosition = new ArrayList<double[]>();
                 List<double[]> sensor = new ArrayList<double[]>();
                 
-                System.out.println("SIMULATION "+counter+" ON "+Util.InstructionChromosome(instructions));
+                if(endEpisode){
+                    pick();
+                    endEpisode = false;
+                }
+                else{
+                    action();
+                }
                 
-                // rotate and initArm
-                base.setWheelSpeeds(Math.abs(instructions[0]));
-                if(instructions[0]>0) base.backwards();
-                else base.forwards();
-                arm.arm_reset();
-                System.out.println(">>>> Initializing");
-                //step(Util.TIME_STEP); 
-                Util.passive_wait(this, 1.5);
-                gpsPosition.add(gps.getValues()); //System.out.println("[GPS] "+Arrays.toString(gps.getValues()));
-                sensor.add(new double[]{touchsensor[0].getValue(), touchsensor[1].getValue()});
-                
-                // go straigth and positionArm
-                base.reset();
-                arm.setPosition(null, instructions[1], 
-                        instructions[2], instructions[3], instructions[4]);
-                System.out.println(">>>> Positioning");
-                //step(Util.TIME_STEP); 
-                Util.passive_wait(this, 1.5);
-                gpsPosition.add(gps.getValues()); //System.out.println("[GPS] "+Arrays.toString(gps.getValues()));
-                sensor.add(new double[]{touchsensor[0].getValue(), touchsensor[1].getValue()});
-                
-                // stop and pick
-                base.reset();
-                arm.setPosition(null, null, null, adjustArm(), null);
-                gripper.grip();
-                System.out.println(">>>> Picking");
-                //step(Util.TIME_STEP); 
-                Util.passive_wait(this, 1.0);
-                gpsPosition.add(gps.getValues()); //System.out.println("[GPS] "+Arrays.toString(gps.getValues()));
-                sensor.add(new double[]{touchsensor[0].getValue(), touchsensor[1].getValue()});
-                
-                // put on plate
-                arm.arm_set_height(Arm.ARM_BACK_PLATE_LOW);
-                System.out.println(">>>> Bringing");
-                //step(Util.TIME_STEP); 
-                Util.passive_wait(this, 1.0);
-                gpsPosition.add(gps.getValues()); //System.out.println("[GPS] "+Arrays.toString(gps.getValues()));
-                sensor.add(new double[]{touchsensor[0].getValue(), touchsensor[1].getValue()});
-                
-                gripper.release();
-                System.out.println(">>>> Puting");
-                //step(Util.TIME_STEP);
-                Util.passive_wait(this, 1.5);
-                gpsPosition.add(gps.getValues()); //System.out.println("[GPS] "+Arrays.toString(gps.getValues()));
+                for(GPS _gps : gps) gpsPosition.add(_gps.getValues());
                 sensor.add(new double[]{touchsensor[0].getValue(), touchsensor[1].getValue()});
                 
                 // write result to file
                 Util.writeFilePositionResult(Util.resultGPSFilePath, gpsPosition);
                 Util.writeFilePositionResult(Util.resultSensorFilePath, sensor);
-             
-                System.out.println("Sending message "+counter);
+                
+                //System.out.println("Sending message "+counter);
                 sendMessage("DONE "+Integer.toString(counter++));
                 Util.cleanAllFile();
             }
@@ -167,17 +132,40 @@ public class MyController extends Robot {
         emitter.send(message.getBytes());
     }
     
-    private double adjustArm(){
-        double[] gpsPos = gps.getValues();
-        double[] OM = new double[3];
-        System.out.println("[GPS] "+Arrays.toString(gpsPos));
-        System.out.println("[OBJ] "+Arrays.toString(objPos));
-        for(int i=0; i<3; i++) OM[i] = objPos[i]-gpsPos[i];
-        double angle = Util.getZangle(OM);
-        System.out.println("[angle] OM = "+angle+" - ARM = "+(instructions[1]+instructions[2]));
-        double diffAngle = angle - (instructions[1]+instructions[2]);
-        System.out.println("[angle] moving "+diffAngle);
-        return diffAngle+Math.PI;
+    private void writeSetting(){
+        Util.writeFileDouble(Util.servoSettingFilePath, Arrays.asList(arm.getSettings()));
+    }
+    
+    private void writePosition(){
+        Util.writeFileDouble(Util.servoPositionPath, Arrays.asList(arm.getPositions()));
+    }
+    
+    private void pick(){
+        gripper.grip();
+        Util.passive_wait(this, 0.5);
+        arm.arm_set_height(1);
+        Util.passive_wait(this, 2.0);
+        if(touchsensor[0].getValue()==touchsensor[1].getValue()){
+            if(touchsensor[0].getValue()==1.0){
+                sendMessage("GOOD");
+            }
+            else sendMessage("BAD");
+        }
+        else sendMessage("BAD");
+        gripper.release();
+        Util.passive_wait(this, 0.25);
+        arm.arm_reset();
+    }
+    
+    private void action(){
+        
+        // rotate and initArm
+        System.out.println(">>>> MOVING "+Arrays.toString(instructions));
+        //step(Util.TIME_STEP);
+        for(int i=1; i<5; i++)
+            arm.move(i, instructions[i]);
+        Util.passive_wait(this, 0.5);
+        
     }
     
     private boolean needSimulation() {
@@ -195,17 +183,13 @@ public class MyController extends Robot {
         Util.cleanFile(Util.commonFilePath);
         instructions = null;
         if(values == null) return;
-        instructions = new double[values.size()-3];
-        objPos = new double[3];
+        instructions = new double[values.size()];
         int i=0;
-        while(i<3) {
-            objPos[i] = values.get(i);
-            i++;
-        }
         while(i<values.size()) {
-            instructions[(i)-3] = values.get(i);
+            instructions[i] = values.get(i);
             i++;
         }
+        if(instructions[0] == 2*Math.PI) endEpisode = true;
     }
     
     private void createBackup(){

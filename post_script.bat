@@ -1,5 +1,5 @@
-SET Controller_files=(MyController Arm Base Gripper SuperController Util)
-SET SuperController_files=(SuperController InstructionFitnessFunction GeneticAlgorithm Util)
+SET Controller_files=(MyController Arm Base Gripper SuperController Util TinyMath)
+SET SuperController_files=(SuperController Datas Demon Agent ControlPanel Util TinyMath)
 
 SET Project_Path="D:\Workspace\Freelancing\webots_project\youbot0\"
 SET Controller_Path=%Project_Path%\controllers\

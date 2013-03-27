@@ -16,14 +16,15 @@ class NodeField{
 
 public class SuperController extends Supervisor {
     
-    public InstructionFitnessFunction fitness = null;
     private Map<String, NodeField> backup = null;
     private Map<String, List<double[]>> results = null;
-    private double[] instructions = null;
+    private Double[] instructions = null;
     private String[] objectDEFs = null;
-    private Thread RLAlgorithm = null;
+    private Agent RLAgent = null;
     private Receiver receiver = null;
     private int counter = 0;
+    private double[] servoMin, servoMax, servoPosition;
+    private int[] servoDivision = new int[]{1, 10, 10, 10, 2};
     
     public SuperController() {
         super();
@@ -35,11 +36,13 @@ public class SuperController extends Supervisor {
         receiver = getReceiver("receiver");
         receiver.enable(1);
         // launch the RL algorithm's thread
-        RLAlgorithm = new GeneticAlgorithm(this);
-        RLAlgorithm.start();
+        RLAgent = new Agent(this);
+        RLAgent.start();
         // dicitonary for results
         // it should contain a pair <"Name of the device", it's value during each step>
         results = new HashMap<String, List<double[]>>();
+        readSetting();
+        readPosition();
     }
     
     public void run() throws InterruptedException{
@@ -53,85 +56,92 @@ public class SuperController extends Supervisor {
                 wait();
             }
         } while(step(Util.TIME_STEP)!=-1);
-        
     }
     
-    public synchronized Map<String, List<double[]>> simulate(double[] instructions){
+    public StateFeature applyAction(Action action){
         //System.out.println("Simulating");
-        this.instructions = instructions;
+        instructions = actionToInstruction(action);
         // Restore startup configuration for new test
-        restoreFromBackup();
-        simulationPhysicsReset();
+        boolean pickSuccess = false;
+        if(action == Action.PICK){
+            simulatePickup(instructions);
+            restoreFromBackup();
+            simulationPhysicsReset();
+            pickSuccess = waitMessage("GOOD");
+        }
+        else{
+            simulateAction(instructions);
+        }
         
-        // write instruction into file, then step along with robot controller
-        simulateOnController();
-        
-        // simulate and record result into result dictionary
-        List<double[]> toGrabPosition = new ArrayList<double[]>();
-        List<double[]> robotPosition = new ArrayList<double[]>();
+        // get result
+        double[] toGrabPosition = getPosition("GrabMe");
         List<double[]> gpsPosition = null;
         List<double[]> sensorValues = null;
-        
-        System.out.println(">>>> Initializing");
-        //step(Util.TIME_STEP);
-        Util.passive_wait(this, 1.5);
-        toGrabPosition.add(getPosition("GrabMe"));
-        robotPosition.add(getPosition("ROBOT"));
-        //System.out.println("[OBJECT] "+Arrays.toString(getPosition("GrabMe")));
-        
-        System.out.println(">>>> Positioning");
-        //step(Util.TIME_STEP);
-        Util.passive_wait(this, 1.5);
-        toGrabPosition.add(getPosition("GrabMe"));;
-        robotPosition.add(getPosition("ROBOT"));
-        //System.out.println("[OBJECT] "+Arrays.toString(getPosition("GrabMe")));
-        
-        System.out.println(">>>> Picking");
-        //step(Util.TIME_STEP);
-        Util.passive_wait(this, 1.0);
-        toGrabPosition.add(getPosition("GrabMe"));;
-        robotPosition.add(getPosition("ROBOT"));
-        //System.out.println("[OBJECT] "+Arrays.toString(getPosition("GrabMe")));
-        
-        System.out.println(">>>> Bringing");
-        //step(Util.TIME_STEP);
-        Util.passive_wait(this, 1.0);
-        toGrabPosition.add(getPosition("GrabMe"));;
-        robotPosition.add(getPosition("ROBOT"));
-        //System.out.println("[OBJECT] "+Arrays.toString(getPosition("GrabMe")));
-        
-        System.out.println(">>>> Puting");
-        //step(Util.TIME_STEP);
-        Util.passive_wait(this, 1.5);
-        toGrabPosition.add(getPosition("GrabMe"));;
-        robotPosition.add(getPosition("ROBOT"));
-        //System.out.println("[OBJECT] "+Arrays.toString(getPosition("GrabMe")));
         
         waitMessage("DONE "+Integer.toString(counter++));
         System.out.println("Got message "+(counter-1));
         gpsPosition = Util.readFilePositionResult(Util.resultGPSFilePath, 3);
         sensorValues = Util.readFilePositionResult(Util.resultSensorFilePath, 2);
-
-        // write down result into hashmap
-        results.put("ROBOT", robotPosition);
-        results.put("OBJECT", toGrabPosition);
-        results.put("GPS", gpsPosition);
-        results.put("SENSORS", sensorValues);
+        double[] sensorVal = sensorValues.get(0);
         
+        // write down result to StateFeature
         
-        ////step(Util.TIME_STEP);
-        //Util.readMapData(results);
-        return results;
+        StateFeature newState = new StateFeature(
+                gpsPosition,
+                toGrabPosition,
+                sensorVal[0]==sensorVal[1]?(sensorVal[0]==1.0?true:false):false,
+                pickSuccess?1:-1);
+        
+        return newState;
     }
     
-    @Override
-    public void finalize(){
-        super.finalize();
-        RLAlgorithm.interrupt();
-        Util.deleteAllNeededFiles();
+    private Double[] actionToInstruction(Action a){
+        int index = 0, sign = 0;
+        Double[] dMovement = new Double[servoDivision.length];
+        switch(a){
+            case Servo0_UP: sign = +1;
+            case Servo0_DOWN: sign = -1; index = 1; break;
+            case Servo1_UP: sign = +1;
+            case Servo1_DOWN: sign = -1; index = 2; break;
+            case Servo2_UP: sign = +1;
+            case Servo2_DOWN: sign = -1; index = 3; break;
+            case Servo3_UP: sign = +1;
+            case Servo3_DOWN: sign = -1; index = 4; break;
+            case PICK: dMovement[0] = 2*Math.PI; break;
+            case NONE: break;
+        }
+        if(index>0)
+            dMovement[index] = sign*(servoMax[index]-servoMin[index])/((double)servoDivision[index]);
+        return dMovement;
     }
     
-    private void waitMessage(String message){
+    private void readSetting(){
+        List<Double> servoSetting = Util.listToDouble(Util.readFileResult(Util.servoSettingFilePath));
+        servoMin = new double[servoSetting.size()/2];
+        servoMax = new double[servoSetting.size()/2];
+        for(int i=0,j=0; i<servoSetting.size(); ){
+            servoMin[j] = servoSetting.get(i++);
+            servoMax[j++] = servoSetting.get(i++);
+        }
+    }
+    
+    private void readPosition(){
+        List<Double> servoPos = Util.listToDouble(Util.readFileResult(Util.servoPositionPath));
+        servoPosition = new double[servoPos.size()];
+        for(int i=0; i<servoPosition.length; i++){
+            servoPosition[i] = servoPos.get(i);
+        }
+    }
+    
+    public boolean isMaxServo(int index){
+        return servoPosition[index+1]>=servoMax[index+1];
+    }
+    
+    public boolean isMinServo(int index){
+        return servoPosition[index+1]<=servoMin[index+1];
+    }
+    
+    private boolean waitMessage(String message){
         byte[] input = null;
         boolean wait = true;
         do{
@@ -139,7 +149,6 @@ public class SuperController extends Supervisor {
             try{
                 input = receiver.getData();
                 receiver.nextPacket();
-                
             } catch(NegativeArraySizeException ex){
                 wait = true;
                 Util.passive_wait(this, 0.001);
@@ -148,23 +157,21 @@ public class SuperController extends Supervisor {
         String str = new String(input);
         if(!str.equals(message)){
             System.err.println("Got wrong message: [message] "+str);
+            return false;
         }
+        return true;
     }
     
-    private void simulateOnController(){
-        // set data file
-        List<Double> l = new ArrayList<Double>();
-        double[] v = getPosition("GrabMe");
-        // send the bottle position first
-        for(double val : v){
-            System.out.println("Down "+val);
-            l.add(Double.valueOf(val));
-        }
-        // then the instruction
-        System.out.println("CHROMOSOME "+Util.InstructionChromosome(instructions));
-        for(double val : instructions)
-            l.add(Double.valueOf(val));
-        Util.writeFileDouble(Util.commonFilePath, l);
+    private void simulateAction(Double[] instructions){
+        Util.writeFileDouble(Util.commonFilePath, Arrays.asList(instructions));
+        Util.passive_wait(this, 0.5);
+    }
+    
+    private void simulatePickup(Double[] instructions){
+        Double[] pick = new Double[instructions.length];
+        pick[0] = 2*Math.PI;
+        Util.writeFileDouble(Util.commonFilePath, Arrays.asList(instructions));
+        Util.passive_wait(this, 2.75);
     }
     
     private void createBackup(){
