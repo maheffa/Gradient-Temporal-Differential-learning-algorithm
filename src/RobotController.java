@@ -1,4 +1,6 @@
-// File:          MyController.java
+
+
+// File:          RobotController.java
 // Date:
 // Description:
 // Author:
@@ -17,6 +19,10 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * A backup of a servo, i.e. a class containing the basic information about a servo
+ * and make it easier to backup and restore a servo's state
+ */
 class BackupServo {
     private Servo servo;
     private double position;
@@ -30,24 +36,38 @@ class BackupServo {
         servo.setPosition(position);
     }
 }
-public class MyController extends Robot {
+public class RobotController extends Robot {
     
+    /**
+     * Handle to the robot's base, gripper and arm
+     */
     private Base base = null;
     private Arm arm = null;
     private Gripper gripper = null;
+    /**
+     * Handle to all devices used by the robot, including GPSs, sensor and emitter
+     */
     private GPS[] gps = null;
     private TouchSensor[] touchsensor = null;
     private Emitter emitter = null;
+    
+    /** attribute used for transitional informations*/
     private double[] instructions = null, objPos = null, robotPos = null;
     private Map<String, BackupServo> backup = null;
-    private boolean endEpisode = false;
-    String[] servoName = new String[] {
-        "finger1", "finger2", "arm1", "arm2", "arm3", "arm4", "arm5",
-        "wheel1", "wheel2", "wheel3", "wheel4"
-    };
-    private int counter = 0;
+    private boolean first = true;
     
-    public MyController() {
+    /** Devices name*/
+    String[] servoName = new String[] {
+            "finger1", "finger2", "arm1", "arm2", "arm3", "arm4", "arm5",
+            "wheel1", "wheel2", "wheel3", "wheel4"
+        };
+    /** simulation counter*/
+    private int counter = 0;
+        
+    /**
+     * Create the controller
+     */
+    public RobotController() {
         super();
         
         // initialization for working with simulation devices
@@ -85,10 +105,18 @@ public class MyController extends Robot {
         emitter = getEmitter("emitter");
         // prepare to backup
         backup = new HashMap<String, BackupServo>();
-        writeSetting();
-        writePosition();
     }
     
+    /**
+     * Run the controller code. It will first create a backup, then loop
+     * over the following instruction:
+     * 1) check if any simulation is needed, if not, wait and check again later
+     * 2) if there is any simulation needed, then read instruction
+     * 3) if the a pickup is needed then grip the gripper and release whatever it has between its gripper on the backplate
+     * 4) otherwise take an action
+     * 5) write down into file the GPS, object and touch sensor result
+     * 6) send a supervisor a signal that the simulation was done then go to step 1
+     */
     public void run() {
         System.out.println("Controller launched");
         
@@ -106,79 +134,87 @@ public class MyController extends Robot {
                 List<double[]> gpsPosition = new ArrayList<double[]>();
                 List<double[]> sensor = new ArrayList<double[]>();
                 
-                if(endEpisode){
-                    pick();
-                    endEpisode = false;
+                gripper.release();
+                
+                if(needToPick()){
+                    gripper.grip();
+                    Util.passive_wait(this, 0.5);
+                    arm.arm_set_height(Arm.ARM_BACK_PLATE_LOW);
+                    Util.passive_wait(this, 1.5);
+                    sensor.add(new double[]{-1});
+                    double sens = Math.max(touchsensor[0].getValue(), touchsensor[1].getValue());
+                    sensor.add(new double[]{sens});
+                    gripper.release();
+                    Util.passive_wait(this, 0.5);
+                    for(int i=0; i<4; i++)
+                        gpsPosition.add(new double[]{0.,0.,0.});
                 }
                 else{
-                    action();
+                    //System.out.println(">>>> Positioning");
+                    //arm.setPosition(null, adjustArm(1, instructions[1]), null, null, null);
+                    arm.setPosition(
+                            instructions[0],
+                            instructions[1],
+                            instructions[2],
+                            instructions[3],
+                            instructions[4]);
+                    Util.passive_wait(this, 0.5);
+                    for(int i=0; i<4; i++)
+                        gpsPosition.add(gps[i].getValues());
+                    double sens = Math.max(touchsensor[0].getValue(), touchsensor[1].getValue());
+                    sensor.add(new double[]{sens});
+                    sensor.add(new double[]{-1});
                 }
                 
-                for(GPS _gps : gps) gpsPosition.add(_gps.getValues());
-                sensor.add(new double[]{touchsensor[0].getValue(), touchsensor[1].getValue()});
-                
-                // write result to file
                 Util.writeFilePositionResult(Util.resultGPSFilePath, gpsPosition);
                 Util.writeFilePositionResult(Util.resultSensorFilePath, sensor);
-                
+             
                 //System.out.println("Sending message "+counter);
                 sendMessage("DONE "+Integer.toString(counter++));
-                Util.cleanAllFile();
+                Util.cleanFile(Util.commonFilePath);
             }
         } while (step(Util.TIME_STEP) != -1);
     }
     
-    private void sendMessage(String message){
+    /**
+     * Send a message over channel
+     * @param message the message to be sent
+     */
+    public void sendMessage(String message){
         emitter.send(message.getBytes());
     }
     
-    private void writeSetting(){
-        Util.writeFileDouble(Util.servoSettingFilePath, Arrays.asList(arm.getSettings()));
-    }
-    
-    private void writePosition(){
-        Util.writeFileDouble(Util.servoPositionPath, Arrays.asList(arm.getPositions()));
-    }
-    
-    private void pick(){
-        gripper.grip();
-        Util.passive_wait(this, 0.5);
-        arm.arm_set_height(1);
-        Util.passive_wait(this, 2.0);
-        if(touchsensor[0].getValue()==touchsensor[1].getValue()){
-            if(touchsensor[0].getValue()==1.0){
-                sendMessage("GOOD");
-            }
-            else sendMessage("BAD");
-        }
-        else sendMessage("BAD");
-        gripper.release();
-        Util.passive_wait(this, 0.25);
-        arm.arm_reset();
-    }
-    
-    private void action(){
-        
-        // rotate and initArm
-        System.out.println(">>>> MOVING "+Arrays.toString(instructions));
-        //step(Util.TIME_STEP);
-        for(int i=1; i<5; i++)
-            arm.move(i, instructions[i]);
-        Util.passive_wait(this, 0.5);
-        
-    }
-    
-    private boolean needSimulation() {
+    /**
+     * Check whether any simulation is needed. Actually, a simulation is needed
+     * when the instruction file is not empty
+     * @return true if any simulation is needed
+     */
+    public boolean needSimulation() {
         try {
             File fl = new File(Util.commonFilePath);
             return (new BufferedReader(new FileReader(fl))).read() != -1;
         } catch (IOException ex) {
-            Logger.getLogger(MyController.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(RobotController.class.getName()).log(Level.SEVERE, null, ex);
         }
         return false;
     }
     
-    private void readInstructions(){
+    /**
+     * Check whether a pickup is need or not. A pickup is needed, actually
+     * when every part of the instruction is set to MAX_VALUE
+     * @return true if any pickup is needed
+     */
+    public boolean needToPick(){
+        for(int i=0; i<5; i++) 
+            if(instructions[i]!=Double.MAX_VALUE)
+                return false;
+        return true;
+    }
+    
+    /**
+     * read the file instruction into an array of double[] - instructions
+     */
+    public void readInstructions(){
         List<Double> values = Util.listToDouble(Util.readFileResult(Util.commonFilePath));
         Util.cleanFile(Util.commonFilePath);
         instructions = null;
@@ -189,9 +225,11 @@ public class MyController extends Robot {
             instructions[i] = values.get(i);
             i++;
         }
-        if(instructions[0] == 2*Math.PI) endEpisode = true;
     }
     
+    /**
+     * Create a backup of the robot's servo
+     */
     private void createBackup(){
         for(String name : servoName){
             BackupServo bn = new BackupServo(getServo(name));
@@ -200,6 +238,9 @@ public class MyController extends Robot {
         }
     }
     
+    /**
+     * Restore servo's state from backup
+     */
     private void restoreFromBackup(){
         for(BackupServo bn : backup.values()){
             bn.restore();
@@ -214,7 +255,7 @@ public class MyController extends Robot {
     
     public static void main(String[] args) throws InterruptedException {
         Util.createAllNeededFiles();
-        MyController controller = new MyController();
+        RobotController controller = new RobotController();
         controller.run();
     }
 }

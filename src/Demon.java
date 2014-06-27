@@ -1,122 +1,159 @@
 
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 
 public abstract class Demon extends Thread{
     
+    private static int demIncrementation = 0;
     protected double[] weight, eligibility, w;
     protected int t = 0, functionNumber, N;
+    private int demonNumber;
     private Agent agent = null;
-    private StateFeature lastState;
-    private double beta = 0.01;
-    
+    public DecimalFormat df = new DecimalFormat("0.000000000");
+    public boolean verbose = false;
+        
     public Demon(Agent agent, int functionNumber){
         w = new double[functionNumber];
         weight = new double[functionNumber];
         eligibility = new double[functionNumber];
+        Arrays.fill(eligibility, 0);
+        Arrays.fill(w, 0);
+        for(int i=0; i<weight.length; i++){
+            weight[i] = Math.random()*20 - 10;
+        }
         this.functionNumber = functionNumber;
         this.agent = agent;
+        demonNumber = demIncrementation++;
+        DecimalFormatSymbols otherSymbols = new DecimalFormatSymbols(Locale.UK);
+        otherSymbols.setDecimalSeparator(',');
+        df.setDecimalFormatSymbols(otherSymbols);
     }
     
     public void resetEligibility(){
         Arrays.fill(eligibility, 0.);
     }
     
-    public double update(StateFeature previous, StateFeature current){
+    @Override
+    public boolean equals(Object o){
+        if(o == this) return true;
+        if(!(o instanceof Demon) || o==null) return false;
+        Demon other = (Demon)o;
+        return this.demonNumber == other.demonNumber;
+    }
+    
+    @Override
+    public int hashCode(){
+        return demonNumber;
+    }
+    
+    public void update(StateServo previous, StateServo current, double coeff){
         // TD algorithm update
-        double v0 = value(previous, w);
-        double v1 = value(current, w);
-        lastState = current;
-        double TDError = agent.getReward() + agent.getGamma()*v1 - v0;
-        eligibility = TinyMath.addVector(
-                weight,
-                TinyMath.multiplyVectorCoeff(agent.getGamma(), eligibility));
+        double TDError = getError(current, previous);
+        if(verbose)System.out.println("before e "+Arrays.toString(eligibility)+" ==> "+coeff);
+        eligibility = TinyMath.multiplyVectorCoeff(
+                        coeff, 
+                        TinyMath.addVector(
+                            this.getFeatureVector(previous),
+                            TinyMath.multiplyVectorCoeff(getGamma()*agent.getLambda(), eligibility)));
+        if(verbose){
+            System.out.println("after e "+Arrays.toString(eligibility));
+            System.out.println("before we"+Arrays.toString(weight));
+        }
         weight = TinyMath.addVector(
                     weight,
                     TinyMath.multiplyVectorCoeff(
                         agent.getAlpha(),
-                        TinyMath.addVector(
+                        TinyMath.subVector(
                             TinyMath.multiplyVectorCoeff(TDError, eligibility),
                             TinyMath.multiplyVectorCoeff(
-                                agent.getGamma()*(1-agent.getLambda())
-                                *TinyMath.multiplyVectorTransp(eligibility, weight),
-                                this.getFeature(current)
+                                getGamma()*(1-agent.getLambda())*TinyMath.multiplyVectorTransp(eligibility, w),
+                                this.getFeatureVector(current)
                             )
                         )
                     )
                 );
+        if(verbose){
+            System.out.println("after we "+Arrays.toString(weight));
+            System.out.println("before w"+Arrays.toString(w));
+        }
         w = TinyMath.addVector(
                     w,
                     TinyMath.multiplyVectorCoeff(
-                        beta,
-                        TinyMath.addVector(
+                        agent.getBeta(),
+                        TinyMath.subVector(
                             TinyMath.multiplyVectorCoeff(TDError, eligibility),
                             TinyMath.multiplyVectorCoeff(
-                                TinyMath.multiplyVectorTransp(getFeature(previous), weight),
-                                this.getFeature(previous)
+                                TinyMath.multiplyVectorTransp(this.getFeatureVector(previous), w),
+                                this.getFeatureVector(current)
                             )
                         )
                     )
                 );
-        return getValue();
+        if(verbose){
+            System.out.println("after w"+Arrays.toString(w));
+            System.out.println("before we"+Arrays.toString(weight));
+        }
+        /*weight = TinyMath.addVector(weight, 
+                                    TinyMath.multiplyVectorCoeff(
+                                        agent.getAlpha()*TDError, 
+                                        this.getFeatureVector(current)));
+        if(verbose) System.out.println("before we"+Arrays.toString(weight));*/
+        StringBuilder str = new StringBuilder();
+        str.append(df.format(TDError)+"; ");
+        for(double v : weight) str.append(df.format(v)+"; ");
+        if(this instanceof DemonPrediction){
+            DemonPrediction this0 = (DemonPrediction)this;
+            str.append(df.format((this0.getValueByK(current)))+"; ");
+            str.append(df.format((this0.expectedValue(current)))+"; ");
+        }
+        str.append("-1; ");
+        Util.writeGTDResultString(str.toString());
+        /*for(double v : eligibility) str.append(df.format(v)+"; ");
+        for(double v : w) str.append(df.format(v)+"; ");
+        str.append("\n");*/
+        
     }
     
-    public double getValue(){
-        return value(lastState, weight);
-    }
-    
-    public double value(StateFeature S , double[] w){
+    public double getValueFunction(StateServo S , double[] weight){
         double v = 0.;
         for(int i=0; i<functionNumber; i++){
-            v += w[i]*function(S, i);
+            v += weight[i]*function(S, i);
         }
         return v;
     }
     
-    public double[] getFeature(StateFeature s){
+    public double getValue(StateServo s){
+        return getValueFunction(s, weight);
+    }
+    
+    private double[] getFeatureVector(StateServo s){
         double[] v = new double[functionNumber];
         for(int i=0; i<functionNumber; i++) v[i] = function(s, i);
         return v;
     }
     
-    public abstract double function(StateFeature S, int index);
-}
-
-
-
-class DemonPredictionProximity extends Demon{
-
-    
-    public DemonPredictionProximity(Agent agent){
-        super(agent, 1);
-    }
-            
-    @Override
-    public double function(StateFeature S, int index) {
-        switch(index){
-            case 0 : return f0(S);
-            default: return 0;
-        }
+    public double getError(StateServo current, StateServo previous){
+        double v0 = getValueFunction(previous, weight);
+        double v1 = getValueFunction(current, weight);
+        if(verbose)System.out.println("TDError = "+getReward(current)+"(R) + "+getGamma()+"(gamma) * "+v1+"(v1) - "+v0+"(v0)");
+        return getReward(current)+getGamma()*v1-v0;
     }
     
-    private double f0(StateFeature S){
-        return TinyMath.distance(S.getGps(3), S.getObject());
-    }
-}
-
-class DemonControl extends Demon{
-
-    private Demon[] predictionDemons;
-    
-    public DemonControl(Agent agent, Demon[] predictionDemons){
-        super(agent, predictionDemons.length);
-        this.predictionDemons = predictionDemons;
+    public double[] getWeight(){
+        return weight;
     }
     
-    @Override
-    public double function(StateFeature S, int index) {
-        return predictionDemons[index].getValue();
+    public abstract double function(StateServo S, int index);
+    public abstract double getReward(StateServo s);
+    public abstract double getGamma();
+    
+    public String toString(){
+        return "[DEMON "+demonNumber+"] [weight] "+Arrays.toString(weight)+" [eligibility] "+Arrays.toString(eligibility)
+                +" [w] "+Arrays.toString(w);
     }
 }
